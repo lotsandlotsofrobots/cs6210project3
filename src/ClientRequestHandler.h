@@ -21,9 +21,7 @@ using store::Store;
 class ClientRequestHandler final {
 
 private:
-		std::unique_ptr<grpc::ServerCompletionQueue>  completionQueue;
-		store::Store::AsyncService     					      asyncService;
-		std::unique_ptr<grpc::Server>                 server;
+
 
 public:
 		ClientRequestHandler();

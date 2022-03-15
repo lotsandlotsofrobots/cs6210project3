@@ -7,7 +7,7 @@
 typedef struct Args
 {
 		std::string vendorAddressFile;
-		int         clientIPPort;
+		std::string clientIPPort;
 		int 			  numberOfThreads;
 } Args;
 
