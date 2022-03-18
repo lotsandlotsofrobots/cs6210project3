@@ -24,6 +24,7 @@ class VendorService final : public Vendor::Service {
                     BidReply* reply) override {
       reply->set_price(hasher_(id_ + request->product_name()) % 100);
       reply->set_vendor_id(id_);
+      std::cout << "Sending a reply: (" << std::to_string(hasher_(id_ + request->product_name()) % 100) << ")\n";
       return Status::OK;
     }
 

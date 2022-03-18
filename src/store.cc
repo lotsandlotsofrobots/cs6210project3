@@ -53,6 +53,14 @@ public:
 std::vector<std::string> vendorIPaddresses;
 
 
+// Let's implement a tiny state machine with the following states.
+enum CallStatus { CREATE, PROCESS, FINISH };
+
+// forward declarataion
+class CallData;
+void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequestCallData);
+
+
 class CallData {
 public:
 		// Take in the "service" instance (in this case representing an asynchronous
@@ -66,11 +74,10 @@ public:
 
 		void Proceed()
 		{
-				std::cout << "Proceed !\n";
-				std::cout.flush();
-
         if (status_ == CREATE)
 				{
+							std::cout << "Proceed CREATE!\n";
+							std::cout.flush();
 			 			// Make this instance progress to the PROCESS state.
 			 			status_ = PROCESS;
 
@@ -89,62 +96,36 @@ public:
 						// part of its FINISH state.
 						new CallData(service_, cq_);
 
-						// The actual processing.
+						std::cout << "Proceed PROCESS!\n";
+						std::cout.flush();
 
-						// field this to a thread
-						{
-
-
-								for (int i = 0; i < vendorIPaddresses.size(); i++)
-								{
-										/*MathTestClient client(
-											grpc::CreateChannel(
-												address,
-												grpc::InsecureChannelCredentials()
-											)
-										);*/
-
-										std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(
-												vendorIPaddresses[i],
-												grpc::InsecureChannelCredentials()
-										);
-
-										grpc::CompletionQueue completionQueue;
-										grpc::ClientContext context;
-
-										vendor::BidQuery request;
-										request.set_product_name(request_.product_name());
-
-										std::unique_ptr<vendor::Vendor::Stub> stub_ = vendor::Vendor::NewStub(channel);
-										std::unique_ptr<grpc::ClientAsyncResponseReader<vendor::BidReply>> rpc(stub_->AsyncgetProductBid(&context, request, &completionQueue));
-
-										grpc::Status status;
-										vendor::BidReply bidReply;
-										rpc->Finish(&bidReply, &status, (void*) this);
-
-										//VendorClient vendor_client(grpc::CreateChannel(server_addr, grpc::InsecureChannelCredentials()));
-										//store_client.callGetProducts(product_name, pq_result);
-
-								}
-
-						}
-
-
+						SubmitBidRequestsToAllVendors(request_.product_name(), this);//&status_, &responder_, &reply_);
 
 						// And we are done! Let the gRPC runtime know we've finished, using the
 						// memory address of this instance as the uniquely identifying tag for
 						// the event.
 
-						status_ = FINISH;
-						responder_.Finish(reply_, grpc::Status::OK, this);
+						//status_ = FINISH;
+						//responder_.Finish(reply_, grpc::Status::OK, this);
         }
         else
         {
+					std::cout << "Proceed FINISH!\n";
+					std::cout.flush();
+
 			      GPR_ASSERT(status_ == FINISH);
 			      // Once in the FINISH state, deallocate ourselves (CallData).
 			      delete this;
         }
     }
+
+		void Finish()
+		{
+				status_ = FINISH;
+				responder_.Finish(reply_, grpc::Status::OK, this);
+
+				std::cout << "Got response! (" << reply_. << ", " << std::to_string(i) << ")\n";
+		}
 
 private:
     // The means of communication with the gRPC runtime for an asynchronous
@@ -168,10 +149,85 @@ private:
     // The means to get back to the client.
     grpc::ServerAsyncResponseWriter<store::ProductReply> responder_;
 
-    // Let's implement a tiny state machine with the following states.
-    enum CallStatus { CREATE, PROCESS, FINISH };
+
     CallStatus status_;  // The current serving state.
 };
+
+
+
+void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequestCallData)// CallStatus *status_, grpc::ServerAsyncResponseWriter<store::ProductReply> *responder_, store::ProductReply reply_)
+{
+		// The actual processing.
+		// field this to a thread
+
+		int numVendors = vendorIPaddresses.size();
+
+		std::shared_ptr<grpc::Channel>         channel[numVendors];
+
+		grpc::CompletionQueue                  completionQueue[numVendors];
+		grpc::ClientContext 					         context[numVendors];
+		vendor::BidQuery 							         bidQueryRequest[numVendors];
+		std::unique_ptr<vendor::Vendor::Stub>  bidStub[numVendors];
+		std::unique_ptr<grpc::ClientAsyncResponseReader<vendor::BidReply>>  bidResponseReader[numVendors];
+
+		grpc::Status                           status[numVendors];
+		vendor::BidReply                       bidReply[numVendors];
+
+
+		for (int i = 0; i < numVendors; i++)
+		{
+				// establish a channel to make the request to the vendor
+				channel[i] = grpc::CreateChannel(
+						vendorIPaddresses[i],
+						grpc::InsecureChannelCredentials()
+				);
+
+				// write the name to the request
+				bidQueryRequest[i].set_product_name(productName);
+
+				// create a stub using the channel
+				bidStub[i] = vendor::Vendor::NewStub(channel[i]);
+
+				// create an asynchronous response reader using the stub, request, and completion queue
+				//   - this will watch for the response in the background
+				//   - then read it into a BidReply
+				//   - then let us know when the BidReply is available for reading via the completionQueue
+				bidResponseReader[i] =
+						std::unique_ptr<grpc::ClientAsyncResponseReader<vendor::BidReply>>
+								(bidStub[i]->AsyncgetProductBid(&context[i], bidQueryRequest[i], &completionQueue[i]));
+
+				// send the request (via the stub via the channel) and wait for the
+				// response reader to put the reponse and status into bidReply / status
+				bidResponseReader[i]->Finish(&bidReply[i], &status[i], (void*)(long long int) i);
+
+				std::cout << "Sent request to " << vendorIPaddresses[i] << "\n";
+		}
+
+		// now we wait to get all the responses
+		for (int i = 0; i < vendorIPaddresses.size(); i++)
+		{
+				void* got_tag;
+				bool ok = false;
+
+				completionQueue[i].Next(&got_tag, &ok);
+
+				//std::cout << "Got response - ok is: " << std::to_string(ok) << "\n";
+
+				if (ok && got_tag == (void*)(long long int) i) {
+					std::cout << "Need to push these replies onto the big reply we send back!\n";
+				    //std::cout << "Got response! (" << productName << ", " << std::to_string(i) << ")\n";
+				}
+		}
+
+		clientRequestCallData->Finish();
+		//clientRequestCallData->status_ = FINISH;
+		//clientRequestCallData->responder_.Finish(clientRequestCallData->reply_, grpc::Status::OK, clientRequestCallData);
+}
+
+
+
+
+
 
 
 
@@ -202,6 +258,12 @@ int main(int argc, char** argv)
 		//ServerContext context;
 		//store::ProductQuery productQuery;
 		std::ifstream vendorFile(args.vendorAddressFile);
+		std::string line;
+
+		while(getline(vendorFile, line))
+		{
+			  vendorIPaddresses.push_back(line);
+		}
 
 /*
 		grpc::ServerAsyncResponseWriter<store::ProductReply> response(&context);
