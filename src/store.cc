@@ -22,6 +22,7 @@
 using std::cout;
 using std::stoi;
 using std::string;
+using std::to_string;
 using std::unique_ptr;
 
 // grpc namespace imports
@@ -34,24 +35,7 @@ using grpc::ServerContext;
 // Store namespace imports
 using store::Store;
 
-/*
-class ClientRequestHandler final {
-
-private:
-		unique_ptr<ServerCompletionQueue>  completionQueue;
-		Store::AsyncService     					 asyncService;
-		unique_ptr<Server>                 server;
-
-public:
-		ClientRequestHandler()
-		{
-
-		}
-};
-*/
-
 std::vector<std::string> vendorIPaddresses;
-
 
 // Let's implement a tiny state machine with the following states.
 enum CallStatus { CREATE, PROCESS, FINISH };
@@ -76,8 +60,8 @@ public:
 		{
         if (status_ == CREATE)
 				{
-							std::cout << "Proceed CREATE!\n";
-							std::cout.flush();
+							cout << "Proceed CREATE!\n";
+							cout.flush();
 			 			// Make this instance progress to the PROCESS state.
 			 			status_ = PROCESS;
 
@@ -96,22 +80,15 @@ public:
 						// part of its FINISH state.
 						new CallData(service_, cq_);
 
-						std::cout << "Proceed PROCESS!\n";
-						std::cout.flush();
+						cout << "Proceed PROCESS!\n";
+						cout.flush();
 
-						SubmitBidRequestsToAllVendors(request_.product_name(), this);//&status_, &responder_, &reply_);
-
-						// And we are done! Let the gRPC runtime know we've finished, using the
-						// memory address of this instance as the uniquely identifying tag for
-						// the event.
-
-						//status_ = FINISH;
-						//responder_.Finish(reply_, grpc::Status::OK, this);
+						SubmitBidRequestsToAllVendors(request_.product_name(), this);
         }
         else
         {
-					std::cout << "Proceed FINISH!\n";
-					std::cout.flush();
+					cout << "Proceed FINISH!\n";
+					cout.flush();
 
 			      GPR_ASSERT(status_ == FINISH);
 			      // Once in the FINISH state, deallocate ourselves (CallData).
@@ -124,7 +101,14 @@ public:
 				status_ = FINISH;
 				responder_.Finish(reply_, grpc::Status::OK, this);
 
-				std::cout << "Got response! (" << reply_. << ", " << std::to_string(i) << ")\n";
+				cout << "Got response! (" << request_.product_name() << ")\n";
+		}
+
+		void AddProductInfo(vendor::BidReply * bidReply)
+		{
+			  store::ProductInfo * info = reply_.add_products();
+				info->set_price(bidReply->price());
+				info->set_vendor_id(bidReply->vendor_id());
 		}
 
 private:
@@ -200,7 +184,7 @@ void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequ
 				// response reader to put the reponse and status into bidReply / status
 				bidResponseReader[i]->Finish(&bidReply[i], &status[i], (void*)(long long int) i);
 
-				std::cout << "Sent request to " << vendorIPaddresses[i] << "\n";
+				cout << "Sent request to " << vendorIPaddresses[i] << "\n";
 		}
 
 		// now we wait to get all the responses
@@ -211,23 +195,14 @@ void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequ
 
 				completionQueue[i].Next(&got_tag, &ok);
 
-				//std::cout << "Got response - ok is: " << std::to_string(ok) << "\n";
-
 				if (ok && got_tag == (void*)(long long int) i) {
-					std::cout << "Need to push these replies onto the big reply we send back!\n";
-				    //std::cout << "Got response! (" << productName << ", " << std::to_string(i) << ")\n";
+					  cout << "Need to push these replies onto the big reply we send back!\n";
+						clientRequestCallData->AddProductInfo(&bidReply[i]);
 				}
 		}
 
 		clientRequestCallData->Finish();
-		//clientRequestCallData->status_ = FINISH;
-		//clientRequestCallData->responder_.Finish(clientRequestCallData->reply_, grpc::Status::OK, clientRequestCallData);
 }
-
-
-
-
-
 
 
 
@@ -235,14 +210,12 @@ int main(int argc, char** argv)
 {
 		if (argc != 4)
 		{
-			  std::cout << "Usage:  ./store [VENDOR_ADDRESS_FILE] [CLIENT_IP:CLIENT_PORT] [NUM_THREADS]\n";
+			  cout << "Usage:  ./store [VENDOR_ADDRESS_FILE] [CLIENT_IP:CLIENT_PORT] [NUM_THREADS]\n";
 				return 1;
 		}
 
 		Args args;
 		ParseArgs(argv, args);
-
-
 
 		std::unique_ptr<grpc::ServerCompletionQueue>  completionQueue;
 		store::Store::AsyncService     					      asyncService;
@@ -255,8 +228,6 @@ int main(int argc, char** argv)
 		completionQueue = builder.AddCompletionQueue();
 		server = builder.BuildAndStart();
 
-		//ServerContext context;
-		//store::ProductQuery productQuery;
 		std::ifstream vendorFile(args.vendorAddressFile);
 		std::string line;
 
@@ -265,25 +236,8 @@ int main(int argc, char** argv)
 			  vendorIPaddresses.push_back(line);
 		}
 
-/*
-		grpc::ServerAsyncResponseWriter<store::ProductReply> response(&context);
-
-		// this call does NOT block but it sends something out there and moves on
-		// you'll get a response later, it has to be snagged by Next()
-		asyncService.RequestgetProducts(&context, &productQuery, &response, &(*completionQueue), &(*completionQueue), (void *) 1);
-
-		void * tag;
-		bool ok;
-
-		completionQueue->Next(&tag, &ok);
-		GPR_ASSERT(ok);
-
-		std::cout << "got something!\n";
-		std::cout.flush();
-*/
-
-		std::cout << "Entering the calldata loop!\n";
-		std::cout.flush();
+		cout << "Entering the calldata loop!\n";
+		cout.flush();
 
 		new CallData(&asyncService, completionQueue.get());
 
@@ -300,13 +254,10 @@ int main(int argc, char** argv)
 		    static_cast<CallData*>(tag)->Proceed();
 	  }
 
-
 		server->Shutdown();
-	  // Always shutdown the completion queue after the server.
 	  completionQueue->Shutdown();
 
-
-		std::cout << "I 'm not ready yet!" << std::endl;
-		std::cout.flush();
+		cout << "I 'm not ready yet!" << std::endl;
+		cout.flush();
 		return EXIT_SUCCESS;
 }
