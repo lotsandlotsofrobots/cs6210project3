@@ -37,6 +37,7 @@ using store::Store;
 
 std::vector<std::string> vendorIPaddresses;
 
+/*
 // Let's implement a tiny state machine with the following states.
 enum CallStatus { CREATE, PROCESS, FINISH };
 
@@ -135,10 +136,10 @@ private:
 
 
     CallStatus status_;  // The current serving state.
-};
+};*/
 
 
-
+/*
 void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequestCallData)// CallStatus *status_, grpc::ServerAsyncResponseWriter<store::ProductReply> *responder_, store::ProductReply reply_)
 {
 		// The actual processing.
@@ -203,7 +204,7 @@ void SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequ
 
 		clientRequestCallData->Finish();
 }
-
+*/
 
 
 int main(int argc, char** argv)
@@ -235,6 +236,8 @@ int main(int argc, char** argv)
 		{
 			  vendorIPaddresses.push_back(line);
 		}
+
+		threadpool::Get()->InitThreads(args.numberOfThreads);
 
 		cout << "Entering the calldata loop!\n";
 		cout.flush();
