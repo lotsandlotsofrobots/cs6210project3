@@ -37,6 +37,12 @@ class CallData;
 void SubmitBidRequestsToAllVendors(CallData *clientRequestCallData);
 void EnqueWithThreadPool(CallData * clientRequestCallData);
 
+/*
+The CallData class for managing the state of getProducts requests is
+heavily borrowed from https://grpc.io/docs/languages/cpp/async/,
+with minor modifications for this application.
+*/
+
 class CallData {
 public:
 		// Take in the "service" instance (in this case representing an asynchronous
@@ -169,7 +175,6 @@ public:
 
 			  if (availableThreads.size() == 0)
 				{
-
 						std::cout << "No available threads, pushing onto request queue\n";
 
 					  requests.push(callData);
@@ -191,7 +196,25 @@ public:
 		void EnqueThreadManager(ThreadManager * tm)
 		{
 				threadsMutex.lock();
-				availableThreads.push(tm);
+				requestsMutex.lock();
+
+				// before pushing ourself back onto the available queue, check if
+				// there are requests that need processing (indicating there weren't)
+				// threads available to handle it
+				if (requests.size() != 0)
+				{
+						CallData * callData = requests.front();
+						requests.pop();
+
+						// put it back to work
+					  tm->AssignCallData(callData);
+				}
+				else
+				{
+						availableThreads.push(tm);
+				}
+
+				requestsMutex.unlock();
 				threadsMutex.unlock();
 		}
 

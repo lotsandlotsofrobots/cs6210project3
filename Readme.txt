@@ -1,0 +1,6 @@
+The threadpool is implemented as a queue of available ThreadManagers.  Each thread manager monitors a variable indicating that work has been assigned to it to know when to begin processing a request.
+
+Upon receipt of a getProducts request, a new CallData is instantiated and the current CallData is pushed into the threadpool's requests queue.  The threadpool then in turn pops a ThreadManager from the front of the queue (if possible) and assigns the callData to it, triggering the ThreadManager to start working on the requests.  If there are no ThreadManagers available when the getProducts requests is received, it's pushed onto the requests queue.  When a ThreadManager completes work, it attempts to return itself to the threadpool, which checks if there are callData currently in the requests queue.  If so, the threadpool infers that all other threads must have work assigned, and pops a request from the front of the queue and returns the ThreadManager to work.  Otherwise, the ThreadManager is returned to the queue of available threads.
+
+References:
+The CallData class for managing the state of getProducts requests is heavily borrowed from https://grpc.io/docs/languages/cpp/async/, with minor modifications for this application.
