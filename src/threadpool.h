@@ -27,9 +27,7 @@ using grpc::ServerBuilder;
 using grpc::ServerCompletionQueue;
 using grpc::ServerContext;
 
-
 extern std::vector<std::string> vendorIPaddresses;
-
 
 // Let's implement a tiny state machine with the following states.
 enum CallStatus { CREATE, PROCESS, FINISH };
@@ -54,9 +52,6 @@ public:
 		{
         if (status_ == CREATE)
 				{
-							//cout << "Proceed CREATE!\n";
-							//cout.flush();
-			 			// Make this instance progress to the PROCESS state.
 			 			status_ = PROCESS;
 
 					 // As part of the initial CREATE state, we *request* that the system
@@ -73,18 +68,10 @@ public:
 						// the one for this CallData. The instance will deallocate itself as
 						// part of its FINISH state.
 						new CallData(service_, cq_);
-
-						//cout << "Proceed PROCESS!\n";
-						//cout.flush();
-
-						//SubmitBidRequestsToAllVendors(request_.product_name(), this);
 						EnqueWithThreadPool(this);
         }
         else
         {
-					//c/out << "Proceed FINISH!\n";
-					//cout.flush();
-
 			      GPR_ASSERT(status_ == FINISH);
 			      // Once in the FINISH state, deallocate ourselves (CallData).
 			      delete this;
@@ -172,8 +159,6 @@ public:
 					  ThreadManager * threadManager = new ThreadManager(i);
 						availableThreads.push(threadManager);
 				}
-
-				std::cout << "There are " << availableThreads.size() << "items in the queue.\n";
 		}
 
 
@@ -195,7 +180,6 @@ public:
 				}
 
 				ThreadManager * threadManager = availableThreads.front();
-				std::cout << "Assigning work to thread " << std::to_string(threadManager->threadID) << "\n";
 				availableThreads.pop();
 
 				threadManager->AssignCallData(callData);
@@ -260,23 +244,14 @@ ThreadManager::ThreadManager(int i)
 
 void ThreadManager::AssignCallData(CallData * callData)
 {
-		std::cout << "Assigning call data!\n";
 		this->clientRequestCallData = callData;
 		workAssigned = true;
 }
 
 
-
-
-//void ThreadManager::SubmitBidRequestsToAllVendors(std::string productName, CallData *clientRequestCallData)// CallStatus *status_, grpc::ServerAsyncResponseWriter<store::ProductReply> *responder_, store::ProductReply reply_)
 void ThreadManager::SubmitBidRequestsToAllVendors()
 {
-
-		// The actual processing.
-		// field this to a thread
 		std::string productName = clientRequestCallData->GetProductName();
-		std::cout << "Submiting bid request for " << productName << "\n";
-
 		int numVendors = vendorIPaddresses.size();
 
 		std::shared_ptr<grpc::Channel>         channel[numVendors];
@@ -316,8 +291,6 @@ void ThreadManager::SubmitBidRequestsToAllVendors()
 				// send the request (via the stub via the channel) and wait for the
 				// response reader to put the reponse and status into bidReply / status
 				bidResponseReader[i]->Finish(&bidReply[i], &status[i], (void*)(long long int) i);
-
-				//cout << "Sent request to " << vendorIPaddresses[i] << "\n";
 		}
 
 		// now we wait to get all the responses
@@ -329,7 +302,6 @@ void ThreadManager::SubmitBidRequestsToAllVendors()
 				completionQueue[i].Next(&got_tag, &ok);
 
 				if (ok && got_tag == (void*)(long long int) i) {
-						//cout << "Need to push these replies onto the big reply we send back!\n";
 						clientRequestCallData->AddProductInfo(&bidReply[i]);
 				}
 		}
